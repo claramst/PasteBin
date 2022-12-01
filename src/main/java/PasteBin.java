@@ -1,22 +1,40 @@
-import com.amazonaws.services.lambda.runtime.Context;
+import dao.PastesContentDao;
+import exceptions.DuplicateIdsException;
+import exceptions.InvalidIdException;
+import exceptions.TableNotFoundException;
+import idgenerator.UniqueIdGenerator;
 
 public class PasteBin {
-  public static String handleRequest(String arg, Context context) {
-    return arg;
+  private UniqueIdGenerator pasteIdGenerator;
+  private PastesContentDao pastesDao;
+  private int MAX_WRITE_ATTEMPTS = 10;
+
+  public PasteBin(UniqueIdGenerator pasteIdGenerator, PastesContentDao pastesDao) {
+    this.pasteIdGenerator = pasteIdGenerator;
+    this.pastesDao = pastesDao;
+  }
+  public String read(String id) throws DuplicateIdsException, InvalidIdException, TableNotFoundException {
+    String content = "";
+    content = pastesDao.readPaste(id);
+    return content;
   }
 
-  public String read(String url) {
-    // Get url from database
-    // Get content from s3 bucket
-    return "PastedContent";
-  }
+  public String write(String text) throws DuplicateIdsException {
+    String uniqueId = pasteIdGenerator.generateUniqueId();
+    int writeAttempts = 0;
 
-  public String write(String text) {
-    // Generate unique url
-    // Check if there's a duplicate
-    // Save url to sql pastes table
-    // Saves text to s3 bucket
-    return "url";
+    while (writeAttempts < MAX_WRITE_ATTEMPTS) {
+      try {
+        pastesDao.readPaste(uniqueId);
+        writeAttempts++;
+        uniqueId = pasteIdGenerator.generateUniqueId();
+      } catch (InvalidIdException | TableNotFoundException ignored) {
+        // We have a unique id
+        break;
+      }
+    }
+    pastesDao.writePaste(uniqueId, text);
+    return uniqueId;
   }
 
 }
